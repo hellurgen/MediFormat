@@ -1,0 +1,5 @@
+{
+  "name": "MediFormat",
+  "description": "Formateador automático de resultados de laboratorio y tratamientos médicos. Permite resumir y ordenar textos médicos fácilmente.",
+  "requestFramePermissions": []
+}
