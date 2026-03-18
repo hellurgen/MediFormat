@@ -1,33 +1,36 @@
-import { GoogleGenAI } from '@google/genai';
-
-export async function processMedicalTextStream(
-  text: string, 
-  onChunk: (text: string) => void
-): Promise<void> {
+export async function processMedicalTextStream(text: string, onChunk: (text: string) => void): Promise<void> {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-    const responseStream = await ai.models.generateContentStream({
-      model: 'gemini-3-flash-preview',
-      contents: text,
-      config: {
-        systemInstruction: AUTO_PROMPT,
-        temperature: 0.1,
-      },
+    const response = await fetch('/api/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
     });
 
-    for await (const chunk of responseStream) {
-      if (chunk.text) {
-        onChunk(chunk.text);
+    if (!response.ok) throw new Error('Error en el servidor intermedio.');
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader!.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6);
+          if (dataStr === '[DONE]') return;
+          try {
+            const data = JSON.parse(dataStr);
+            if (data.text) onChunk(data.text);
+          } catch (e) {}
+        }
       }
     }
   } catch (error: any) {
-    console.error('Error processing text:', error);
-    
-    if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
-      throw new Error('Error de conexión: El navegador bloqueó la petición a la IA. Si usas un bloqueador de anuncios (como uBlock) o el navegador Brave, por favor desactívalo para esta página. Si estás en la red de un hospital, es probable que su firewall esté bloqueando el acceso a los servicios de IA de Google.');
-    }
-    
-    throw new Error(error.message || 'Ocurrió un error al procesar el texto. Por favor, inténtalo de nuevo.');
+    console.error('Error:', error);
+    throw new Error('Error de conexión. Revisa tu internet.');
   }
 }
